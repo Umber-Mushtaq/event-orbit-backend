@@ -65,7 +65,6 @@ const serviceSchema = new mongoose.Schema(
   },
 );
 
-// Optional: Creates index strings on location and title properties to make marketplace search faster later
 serviceSchema.index({ title: "text", location: "text" });
 
 const Service = mongoose.model("Service", serviceSchema);

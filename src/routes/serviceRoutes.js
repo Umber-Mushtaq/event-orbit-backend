@@ -1,9 +1,14 @@
 import express from "express";
-import { getPublicServiceDetails } from "../controllers/servicesController.js";
+import {
+  getVendorServiceDetails,
+  getAllServices,
+  getServiceDetail,
+} from "../controllers/servicesController.js";
 
 const router = express.Router();
 
-// Public route to view individual service records
-router.get("/:id", getPublicServiceDetails);
+router.get("/getAllServices", getAllServices);
+router.get("/:id", getVendorServiceDetails);
+router.get("/serviceDetail/:id", getServiceDetail);
 
 export default router;
