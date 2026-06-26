@@ -11,13 +11,17 @@ import {
   updateService,
   updateVendorProfile,
   getVendorProfile,
+  getAllVendors,
+  getPublicVendorProfile,
 } from "../controllers/vendorController.js";
 import { protect, restrictTo } from "../middlewares/authMiddleware.js";
 import { upload } from "../config/cloudinary.js";
 
 const router = express.Router();
 
-// 1. GLOBAL MIDDLEWARES (Applies to all routes below)
+router.get("/all", getAllVendors);
+router.get("/Profile/:id", getPublicVendorProfile);
+
 router.use(protect);
 router.use(restrictTo("vendor"));
 

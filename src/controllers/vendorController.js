@@ -430,26 +430,56 @@ export const updateVendorProfile = async (req, res, next) => {
 
 export const getVendorProfile = async (req, res, next) => {
   try {
-    // 1. Fetch user ID from authenticated request object mapping
-    const userId = req.user.id;
-
-    // 2. Query MongoDB for profile document, explicitly omitting the password field
+    const userId = req.user.id || req.params.id;
     const userProfile = await User.findById(userId).select("-password");
-
-    // 3. Fallback validation check
     if (!userProfile) {
       const error = new Error("Vendor profile registry not found.");
       error.statusCode = 404;
       throw error;
     }
-
-    // 4. Send successful response payload
     res.status(200).json({
       success: true,
       profile: userProfile,
     });
   } catch (error) {
-    // Passes errors seamlessly to your centralized global error middleware pipeline
+    next(error);
+  }
+};
+
+export const getPublicVendorProfile = async (req, res, next) => {
+  try {
+    const userId = req.params.id;
+
+    const userProfile = await User.findById(userId).select("-password");
+    if (!userProfile || userProfile.role !== "vendor") {
+      const error = new Error("Vendor profile registry not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+    const reviews = await Review.find({ vendorId: userId })
+      .populate("userId", "firstName lastName profileImage")
+      .populate("serviceId", "title")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      profile: userProfile,
+      reviews,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getAllVendors = async (req, res, next) => {
+  try {
+    const vendors = await User.find({ role: "vendor" }).select("-password");
+    res.status(200).json({
+      success: true,
+      count: vendors.length,
+      vendors,
+    });
+  } catch (error) {
     next(error);
   }
 };
