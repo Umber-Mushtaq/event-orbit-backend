@@ -17,14 +17,6 @@ const reviewSchema = new mongoose.Schema(
       ref: "Service",
       required: [true, "Review must be linked to a service"],
     },
-    bookingId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Booking",
-      required: [
-        true,
-        "Review must reference an actual service booking transaction",
-      ],
-    },
     rating: {
       type: Number,
       required: [true, "Please rate this service from 1 to 5 stars"],

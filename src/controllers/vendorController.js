@@ -21,7 +21,7 @@ export const getVendorDashboardOverview = async (req, res, next) => {
             {
               $match: {
                 eventDate: { $gte: today },
-                bookingStatus: "confirmed",
+                bookingStatus: "pending",
               },
             },
             { $count: "count" },

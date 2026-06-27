@@ -12,8 +12,8 @@ const categorySchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-    icon: {
-      type: String, // Can store class names like "lucide-camera" or a URL string
+    image: {
+      type: String,
       trim: true,
     },
   },

@@ -7,6 +7,7 @@ export const getAllCategories = async (req, res) => {
     const formattedCategories = categories.map((cat) => ({
       id: cat._id,
       name: cat.name,
+      image: cat.image,
     }));
 
     return res.status(200).json({

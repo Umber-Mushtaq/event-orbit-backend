@@ -118,3 +118,59 @@ export const getVendorDashboardReviews = async (req, res, next) => {
     next(error);
   }
 };
+
+export const addReview = async (req, res) => {
+  try {
+    const { vendorId, serviceId, rating, comment } = req.body;
+    const userId = req.user?.id || req.body.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required to post a review.",
+      });
+    }
+
+    // 1. Explicit validation fallback before database hit
+    if (!serviceId || !vendorId) {
+      return res.status(400).json({
+        success: false,
+        message: "Both Service ID and Vendor ID parameters are required.",
+      });
+    }
+
+    // 2. Commit review payload metrics straight to MongoDB
+    const newReview = await Review.create({
+      userId,
+      vendorId,
+      serviceId,
+      rating,
+      comment,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Review submitted successfully!",
+      review: newReview,
+    });
+  } catch (error) {
+    // 3. Handle Mongo Index Unique Constraint violations
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "You have already logged an official review experience for this specific service.",
+      });
+    }
+
+    if (error.name === "ValidationError") {
+      const messages = Object.values(error.errors).map((val) => val.message);
+      return res.status(400).json({ success: false, message: messages[0] });
+    }
+
+    console.error("Review system exception:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal Server Error." });
+  }
+};

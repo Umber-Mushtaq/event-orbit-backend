@@ -1,6 +1,8 @@
 import Booking from "../models/Bookings.js";
 import Review from "../models/Review.js";
 import Wishlist from "../models/Wishlist.js";
+import User from "../models/User.js";
+import { uploadToCloudinary } from "../config/cloudinary.js";
 import mongoose from "mongoose";
 
 export const getUserDashboardOverview = async (req, res) => {
@@ -133,5 +135,77 @@ export const getUserDashboardOverview = async (req, res) => {
       message: "Error sync tracking user metrics pipeline payload data assets",
       error: error.message,
     });
+  }
+};
+
+export const getCustomerProfile = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    // Select everything except sensitive password metrics
+    const customer = await User.findById(userId).select(
+      "-password -resetPasswordToken -resetPasswordExpire",
+    );
+
+    if (!customer) {
+      const error = new Error("Customer profile document registry not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    res.status(200).json({
+      success: true,
+      profile: customer,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateCustomerProfile = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { firstName, lastName, phoneNumber, address } = req.body;
+
+    // 1. Fetch current profile document from MongoDB
+    const customerProfile = await User.findById(userId);
+
+    if (!customerProfile) {
+      const error = new Error("Customer profile document instance not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // 2. Process Cloudinary streaming if an explicit avatar image binary payload is sent
+    if (req.file) {
+      const uploadedAvatarUrl = await uploadToCloudinary(req.file.buffer);
+      customerProfile.profileImage = uploadedAvatarUrl;
+    }
+
+    // 3. Fall back gracefully to existing entries if fields are left blank or omitted
+    customerProfile.firstName =
+      firstName !== undefined ? firstName : customerProfile.firstName;
+    customerProfile.lastName =
+      lastName !== undefined ? lastName : customerProfile.lastName;
+    customerProfile.address =
+      address !== undefined ? address : customerProfile.address;
+
+    // Maps to the exact schema root field name key descriptor: 'phoneNumber'
+    customerProfile.phoneNumber =
+      phoneNumber !== undefined ? phoneNumber : customerProfile.phoneNumber;
+
+    // 4. Save updates and trigger structural validation hooks
+    const updatedCustomer = await customerProfile.save();
+
+    // Prevent hashed credentials from passing down the pipeline network
+    updatedCustomer.password = undefined;
+
+    res.status(200).json({
+      success: true,
+      message: "Personal profile configurations synchronized successfully!",
+      profile: updatedCustomer,
+    });
+  } catch (error) {
+    next(error);
   }
 };
