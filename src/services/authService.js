@@ -9,7 +9,6 @@ const generateToken = (id) => {
   });
 };
 
-// Unified Registration Flow
 export const registerUnifiedUser = async ({
   firstName,
   lastName,
@@ -58,7 +57,6 @@ export const registerUnifiedUser = async ({
   };
 };
 
-// Unified Login Flow
 export const loginUnifiedUser = async ({ email, password }) => {
   const user = await User.findOne({ email });
 
@@ -111,7 +109,6 @@ export const loginUnifiedUser = async ({ email, password }) => {
   };
 };
 
-// Process Forgot Password - Generate & Hash Token, Send Email
 export const processForgotPassword = async (email) => {
   const user = await User.findOne({ email });
 
@@ -161,7 +158,6 @@ export const processForgotPassword = async (email) => {
   }
 };
 
-// Process Reset Password - Verify Token & Update Password
 export const processResetPassword = async (token, newPassword) => {
   // Hash the token from URL parameters to match against database value
   const tokenCrypto = crypto.createHash("sha256").update(token).digest("hex");

@@ -1,44 +1,44 @@
 import Booking from "../models/Bookings.js";
 import mongoose from "mongoose";
 
-export const getBookedDates = async (req, res, next) => {
-  try {
-    const { serviceId } = req.query;
+// export const getBookedDates = async (req, res, next) => {
+//   try {
+//     const { serviceId } = req.query;
 
-    if (!serviceId) {
-      const error = new Error("Service ID query parameter is required.");
-      error.statusCode = 400;
-      throw error;
-    }
+//     if (!serviceId) {
+//       const error = new Error("Service ID query parameter is required.");
+//       error.statusCode = 400;
+//       throw error;
+//     }
 
-    // 1. Fetch only non-cancelled bookings specifically matching this service
-    const bookings = await Booking.find({
-      serviceId,
-      bookingStatus: { $ne: "cancelled" },
-    }).select("eventDate");
+//     // 1. Fetch only non-cancelled bookings specifically matching this service
+//     const bookings = await Booking.find({
+//       serviceId,
+//       bookingStatus: { $ne: "cancelled" },
+//     }).select("eventDate");
 
-    // 2. Format dates uniformly to "YYYY-MM-DD" using strict UTC extractions
-    const bookedDates = bookings.map((booking) => {
-      const date = new Date(booking.eventDate);
+//     // 2. Format dates uniformly to "YYYY-MM-DD" using strict UTC extractions
+//     const bookedDates = bookings.map((booking) => {
+//       const date = new Date(booking.eventDate);
 
-      // ✅ Using UTC methods prevents local timezone offsets from shifting dates
-      const year = date.getUTCFullYear();
-      const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-      const day = String(date.getUTCDate()).padStart(2, "0");
+//       // ✅ Using UTC methods prevents local timezone offsets from shifting dates
+//       const year = date.getUTCFullYear();
+//       const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+//       const day = String(date.getUTCDate()).padStart(2, "0");
 
-      return `${year}-${month}-${day}`;
-    });
+//       return `${year}-${month}-${day}`;
+//     });
 
-    const uniqueBookedDates = [...new Set(bookedDates)];
+//     const uniqueBookedDates = [...new Set(bookedDates)];
 
-    res.status(200).json({
-      success: true,
-      bookedDates: uniqueBookedDates,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+//     res.status(200).json({
+//       success: true,
+//       bookedDates: uniqueBookedDates,
+//     });
+//   } catch (error) {
+//     next(error);
+//   }
+// };
 
 export const getVendorBookings = async (req, res, next) => {
   try {
@@ -105,34 +105,190 @@ export const getVendorBookings = async (req, res, next) => {
 export const updateBookingStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { status } = req.body; // Expects "confirmed" or "cancelled"
+    const { status } = req.body; // "confirmed" or "cancelled"
+    const actorId = req.user.id; // The logged-in user's ID from the JWT token
 
+    // 1. Basic Validation
     if (!["confirmed", "cancelled"].includes(status)) {
       const error = new Error("Invalid booking status action requested.");
       error.statusCode = 400;
       throw error;
     }
 
-    const booking = await Booking.findOneAndUpdate(
-      { _id: id, vendorId: req.user.id }, // Security constraint block
-      { bookingStatus: status },
-      { new: true, runValidators: true },
-    );
+    // 2. Fetch the booking first to see who it belongs to
+    const booking = await Booking.findById(id);
 
     if (!booking) {
-      const error = new Error(
-        "Booking request not found or unauthorized action.",
-      );
+      const error = new Error("Booking request not found.");
       error.statusCode = 404;
       throw error;
     }
 
+    // 3. Identify who is trying to change the status
+    const isOwnerCustomer = booking.userId.toString() === actorId;
+    const isAssignedVendor = booking.vendorId.toString() === actorId;
+
+    // Security Guard: If they aren't the customer OR the vendor, kick them out
+    if (!isOwnerCustomer && !isAssignedVendor) {
+      const error = new Error(
+        "Unauthorized action against this booking record.",
+      );
+      error.statusCode = 403;
+      throw error;
+    }
+
+    // 4. Role-Based Logic Guards
+    if (isOwnerCustomer && status === "confirmed") {
+      // A customer shouldn't be able to force-approve their own booking
+      const error = new Error(
+        "Customers cannot accept or confirm booking requests.",
+      );
+      error.statusCode = 403;
+      throw error;
+    }
+
+    // 5. Apply Updates and Save
+    booking.bookingStatus = status;
+
+    if (status === "cancelled") {
+      booking.paymentStatus = "refunded";
+    }
+
+    await booking.save();
+
+    // 6. Dynamic Contextual Success Message
+    let successMessage = `Booking has been successfully ${status}.`;
+    if (status === "confirmed") {
+      successMessage = "Booking has been successfully confirmed.";
+    } else if (status === "cancelled") {
+      successMessage = isOwnerCustomer
+        ? "Booking has been successfully cancelled by the customer."
+        : "Booking request has been declined by the vendor.";
+    }
+
     res.status(200).json({
       success: true,
-      message: `Booking has been successfully ${status === "confirmed" ? "confirmed" : "declined"}.`,
+      message: successMessage,
       booking,
     });
   } catch (error) {
     next(error);
+  }
+};
+
+export const createBooking = async (req, res, next) => {
+  try {
+    const { serviceId, vendorId } = req.params;
+    const userId = req.user.id;
+
+    const { eventDate, guestsCount, totalAmount } = req.body;
+
+    if (!eventDate || !guestsCount || !totalAmount) {
+      const error = new Error("Missing transaction payload components.");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const newBooking = await Booking.create({
+      userId,
+      vendorId,
+      serviceId,
+      eventDate: new Date(eventDate),
+      guestsCount,
+      totalAmount,
+      bookingStatus: "pending",
+      paymentStatus: "pending",
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Booking requested successfully!",
+      booking: newBooking,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getBookedDates = async (req, res, next) => {
+  try {
+    const { serviceId } = req.query;
+
+    if (!serviceId) {
+      const error = new Error("Service ID query parameter is required.");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const bookings = await Booking.find({
+      serviceId,
+      bookingStatus: { $ne: "cancelled" },
+    }).select("eventDate serviceId");
+
+    // Map into a key-value pair dictionary structure required by frontend state
+    const bookedDatesObject = {};
+    bookings.forEach((booking) => {
+      const date = new Date(booking.eventDate);
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(date.getUTCDate()).padStart(2, "0");
+      const key = `${year}-${month}-${day}`;
+
+      // Since specific event names aren't in this schema layer, flag it generically
+      bookedDatesObject[key] = "Booked";
+    });
+
+    res.status(200).json({
+      success: true,
+      bookedDates: bookedDatesObject,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getCustomerBookings = async (req, res) => {
+  try {
+    const authenticatedUserId = new mongoose.Types.ObjectId(req.user.id);
+    const { status } = req.query;
+
+    const queryConditions = { userId: authenticatedUserId };
+
+    if (status && status !== "all") {
+      queryConditions.bookingStatus = status;
+    }
+
+    const bookings = await Booking.find(queryConditions)
+      .populate({
+        path: "serviceId",
+        select: "title price priceType images location",
+      })
+      .sort({ createdAt: -1 });
+
+    const formattedBookings = bookings.map((booking) => ({
+      id: booking._id,
+      serviceName: booking.serviceId?.title || "Archived Service Listing",
+      status: booking.bookingStatus,
+      date: new Date(booking.eventDate).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
+      amount: booking.totalAmount,
+      paymentStatus: booking.paymentStatus,
+      guestsCount: booking.guestsCount,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      count: formattedBookings.length,
+      bookingsList: formattedBookings,
+    });
+  } catch (error) {
+    console.error("Error inside getCustomerBookings controller:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server Error: Failed to retrieve personal booking collections.",
+    });
   }
 };

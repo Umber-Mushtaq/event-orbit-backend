@@ -12,6 +12,8 @@ import serviceRoutes from "./src/routes/serviceRoutes.js";
 import reviewRoutes from "./src/routes/reviewRoutes.js";
 import bookingRoutes from "./src/routes/bookingRoutes.js";
 import userDashboardRoutes from "./src/routes/userDashboardRoutes.js";
+import wishlistRoutes from "./src/routes/wishlistRoutes.js";
+
 import "./src/models/Bookings.js";
 import "./src/models/Category.js";
 import "./src/models/Review.js";
@@ -35,6 +37,7 @@ app.use("/api/services", serviceRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/userDashboard", userDashboardRoutes);
+app.use("/api/wishlist", wishlistRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: "Resource API Route Not Found" });
