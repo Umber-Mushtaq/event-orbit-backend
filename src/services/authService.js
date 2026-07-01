@@ -60,7 +60,7 @@ export const registerUnifiedUser = async ({
 export const loginUnifiedUser = async ({ email, password }) => {
   const user = await User.findOne({ email });
 
-  if (!user || user.role === "admin") {
+  if (!user) {
     const err = new Error("Invalid credentials");
     err.statusCode = 401;
     throw err;

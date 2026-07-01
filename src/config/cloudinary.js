@@ -1,7 +1,6 @@
-// backend/src/config/cloudinary.js
 import { v2 as cloudinary } from "cloudinary";
 import multer from "multer";
-import sharp from "sharp"; // 🔥 Import sharp
+import sharp from "sharp";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -21,20 +20,13 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Set your local multer safety catch slightly higher (e.g., 25MB)
-// so large camera files can at least reach your backend to be compressed.
 export const upload = multer({
   storage,
   fileFilter,
   limits: { fileSize: 25 * 1024 * 1024 },
 });
 
-/**
- * Compresses an image asset buffer using sharp and streams it to Cloudinary
- */
 export const uploadToCloudinary = async (fileBuffer) => {
-  // 🔥 Optimizing step: Resize to max 1920px width (maintaining aspect ratio)
-  // and convert to compressed progressive JPEG format at 80% quality level.
   const optimizedBuffer = await sharp(fileBuffer)
     .resize({ width: 1920, withoutEnlargement: true })
     .jpeg({ quality: 80, progressive: true })
@@ -52,6 +44,6 @@ export const uploadToCloudinary = async (fileBuffer) => {
       },
     );
 
-    uploadStream.end(optimizedBuffer); // Send the optimized, lightweight buffer!
+    uploadStream.end(optimizedBuffer);
   });
 };
