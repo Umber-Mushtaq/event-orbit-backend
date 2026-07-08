@@ -1,6 +1,6 @@
 // backend/src/middlewares/authMiddleware.js
 import jwt from "jsonwebtoken";
-import User from "../models/User.js"; // Adjust this path to match your exact User model location
+import User from "../models/User.js"; 
 
 export const protect = async (req, res, next) => {
   let token;
@@ -11,11 +11,11 @@ export const protect = async (req, res, next) => {
       req.headers.authorization &&
       req.headers.authorization.startsWith("Bearer")
     ) {
-      // Split "Bearer <JWT_TOKEN_STRING>" to extract the token string itself
+      
       token = req.headers.authorization.split(" ")[1];
     }
 
-    // 2. If no token is attached, deny entry instantly
+   
     if (!token) {
       const error = new Error(
         "Not authorized to access this route. Login required.",
@@ -70,7 +70,7 @@ export const restrictTo = (...roles) => {
       const error = new Error(
         "Access Denied: You do not have permissions to perform this action.",
       );
-      error.statusCode = 403; // Forbidden
+      error.statusCode = 403; 
       return next(error);
     }
     next();

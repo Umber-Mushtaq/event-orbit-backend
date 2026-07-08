@@ -1,13 +1,7 @@
 import crypto from "crypto";
-import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import sendEmail from "../utils/sendEmail.js";
-
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE,
-  });
-};
+import { generateToken } from "../utils/token.js";
 
 export const registerUnifiedUser = async ({
   firstName,
@@ -58,7 +52,8 @@ export const registerUnifiedUser = async ({
 };
 
 export const loginUnifiedUser = async ({ email, password }) => {
-  const user = await User.findOne({ email });
+  const normalizedEmail = String(email).toLowerCase().trim();
+  const user = await User.findOne({ email: normalizedEmail });
 
   if (!user) {
     const err = new Error("Invalid credentials");
