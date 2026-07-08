@@ -50,6 +50,7 @@ const serializeAdmin = (user) => ({
   lastName: user.lastName,
   email: user.email,
   role: user.role,
+  avatarUrl: user.profileImage || "",
   avatar: user.profileImage || "",
 });
 
@@ -200,9 +201,15 @@ const buildCategoryRows = async () => {
 const toDisplayEvent = (event) => ({
   id: event.displayId,
   name: event.name,
+  title: event.name,
+  eventName: event.name,
   category: event.category,
-  date: toIsoDateOnly(event.date),
+  categoryId: event.categoryId || "",
+  date: toIsoDateOnly(event.eventDate || event.date),
+  eventDate: toIsoDateOnly(event.eventDate || event.date),
+  eventTime: event.eventTime || "",
   venue: event.venue,
+  venueId: event.venueId || "",
   status: event.status,
   attendees: event.attendees,
   revenue: event.revenue,
@@ -253,6 +260,93 @@ const requireFields = (payload, fields) => {
     error.statusCode = 400;
     throw error;
   }
+};
+
+const normalizeEventDate = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+};
+
+const normalizeEventTime = (value) => {
+  const time = String(value || "").trim();
+  if (!/^\d{2}:\d{2}$/.test(time)) return null;
+
+  const [hours, minutes] = time.split(":").map(Number);
+  if (hours > 23 || minutes > 59) return null;
+
+  return time;
+};
+
+const normalizeVenueId = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+const resolveCategorySelection = async (value) => {
+  const rawValue = String(value || "").trim();
+  if (!rawValue) return null;
+
+  const category = await Category.findOne({
+    $or: [{ _id: rawValue }, { displayId: rawValue }, { name: rawValue }],
+  }).lean();
+
+  if (category) {
+    return {
+      id: String(category._id),
+      name: category.name,
+    };
+  }
+
+  return {
+    id: rawValue,
+    name: rawValue,
+  };
+};
+
+const buildVenueOptions = async () => {
+  const events = await AdminEvent.find({}).select("venue venueId").lean();
+  const uniqueVenues = new Map();
+
+  events.forEach((event) => {
+    const name = String(event.venue || "").trim();
+    if (!name) return;
+
+    const id = String(event.venueId || normalizeVenueId(name));
+    if (!uniqueVenues.has(id)) {
+      uniqueVenues.set(id, {
+        id,
+        name,
+      });
+    }
+  });
+
+  return [...uniqueVenues.values()];
+};
+
+const resolveVenueSelection = async (value) => {
+  const rawValue = String(value || "").trim();
+  if (!rawValue) return null;
+
+  const venues = await buildVenueOptions();
+  const normalizedValue = normalizeVenueId(rawValue);
+  const match = venues.find((venue) =>
+    [venue.id, normalizeVenueId(venue.name)].includes(rawValue) ||
+    [venue.id, normalizeVenueId(venue.name)].includes(normalizedValue) ||
+    venue.name.toLowerCase() === rawValue.toLowerCase(),
+  );
+
+  if (match) {
+    return match;
+  }
+
+  return {
+    id: normalizedValue || rawValue,
+    name: rawValue,
+  };
 };
 
 const fileToUrl = async (file) => {
@@ -479,7 +573,43 @@ export const getRecentEvents = asyncHandler(async (req, res) => {
   const events = (await AdminEvent.find({}).lean()).map(toDisplayEvent);
   const filtered = applyListQuery(events, {
     search,
-    searchFields: ["id", "name", "category", "venue", "status", "organizer"],
+    searchFields: [
+      "id",
+      "name",
+      "eventName",
+      "category",
+      "categoryId",
+      "venue",
+      "venueId",
+      "status",
+      "organizer",
+      "eventDate",
+      "eventTime",
+    ],
+    sortBy,
+    sortOrder,
+    page,
+    limit,
+  });
+
+  return res.status(200).json({
+    success: true,
+    data: {
+      items: filtered.items,
+      pagination: filtered.pagination,
+    },
+  });
+});
+
+export const listVenues = asyncHandler(async (req, res) => {
+  const { search, sortBy = "name", sortOrder = "asc" } = req.query;
+  const page = parsePage(req.query.page, 1);
+  const limit = parseLimit(req.query.limit, 10, 100);
+  const venues = await buildVenueOptions();
+
+  const filtered = applyListQuery(venues, {
+    search,
+    searchFields: ["id", "name"],
     sortBy,
     sortOrder,
     page,
@@ -534,7 +664,7 @@ export const listEvents = asyncHandler(async (req, res) => {
   const events = (await AdminEvent.find({}).lean()).map(toDisplayEvent);
   const windowed = events.filter((item) => {
     if (!dateFrom && !dateTo) return true;
-    const date = new Date(item.date);
+    const date = new Date(item.eventDate || item.date);
     if (Number.isNaN(date.getTime())) return false;
     if (dateFrom && date < new Date(dateFrom)) return false;
     if (dateTo && date > new Date(dateTo)) return false;
@@ -543,7 +673,19 @@ export const listEvents = asyncHandler(async (req, res) => {
 
   const filtered = applyListQuery(windowed, {
     search,
-    searchFields: ["id", "name", "category", "venue", "status", "organizer"],
+    searchFields: [
+      "id",
+      "name",
+      "eventName",
+      "category",
+      "categoryId",
+      "venue",
+      "venueId",
+      "status",
+      "organizer",
+      "eventDate",
+      "eventTime",
+    ],
     filters: { status, category },
     sortBy,
     sortOrder,
@@ -577,13 +719,48 @@ export const getEventById = asyncHandler(async (req, res) => {
 });
 
 export const createEvent = asyncHandler(async (req, res) => {
-  requireFields(req.body, ["name", "category", "venue", "date"]);
+  const eventName = String(req.body.eventName || req.body.name || "").trim();
+  const categorySelection = await resolveCategorySelection(req.body.categoryId || req.body.category);
+  const venueSelection = await resolveVenueSelection(req.body.venueId || req.body.venue);
+  if (!eventName) {
+    const error = new Error("eventName is required.");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!categorySelection) {
+    const error = new Error("categoryId is required.");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!venueSelection) {
+    const error = new Error("venueId is required.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const eventDate = normalizeEventDate(req.body.eventDate || req.body.date);
+  const eventTime = normalizeEventTime(req.body.eventTime);
+
+  if (!eventDate) {
+    const error = new Error("eventDate is required.");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!eventTime) {
+    const error = new Error("eventTime is required.");
+    error.statusCode = 400;
+    throw error;
+  }
 
   const event = await AdminEvent.create({
-    name: req.body.name,
-    category: req.body.category,
-    venue: req.body.venue,
-    date: req.body.date,
+    name: eventName,
+    category: categorySelection.name,
+    categoryId: categorySelection.id,
+    venue: venueSelection.name,
+    venueId: venueSelection.id,
+    eventDate,
+    eventTime,
+    date: eventDate,
     status: req.body.status || "Draft",
     attendees: toNumber(req.body.attendees),
     revenue: toNumber(req.body.revenue),
@@ -605,9 +782,53 @@ export const updateEvent = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: "Event not found" });
   }
 
-  ["name", "category", "venue", "date", "status", "organizerName", "organizerEmail", "vendorId"].forEach((field) => {
+  if (req.body.eventName !== undefined || req.body.name !== undefined) {
+    event.name = String(req.body.eventName || req.body.name || "").trim();
+  }
+  if (req.body.categoryId !== undefined || req.body.category !== undefined) {
+    const categorySelection = await resolveCategorySelection(
+      req.body.categoryId || req.body.category,
+    );
+    if (!categorySelection) {
+      const error = new Error("categoryId must be provided.");
+      error.statusCode = 400;
+      throw error;
+    }
+    event.category = categorySelection.name;
+    event.categoryId = categorySelection.id;
+  }
+  if (req.body.venueId !== undefined || req.body.venue !== undefined) {
+    const venueSelection = await resolveVenueSelection(req.body.venueId || req.body.venue);
+    if (!venueSelection) {
+      const error = new Error("venueId must be provided.");
+      error.statusCode = 400;
+      throw error;
+    }
+    event.venue = venueSelection.name;
+    event.venueId = venueSelection.id;
+  }
+  ["status", "organizerName", "organizerEmail", "vendorId"].forEach((field) => {
     if (req.body[field] !== undefined) event[field] = req.body[field];
   });
+  if (req.body.eventDate !== undefined || req.body.date !== undefined) {
+    const nextEventDate = normalizeEventDate(req.body.eventDate || req.body.date);
+    if (!nextEventDate) {
+      const error = new Error("eventDate must be a valid date.");
+      error.statusCode = 400;
+      throw error;
+    }
+    event.eventDate = nextEventDate;
+    event.date = nextEventDate;
+  }
+  if (req.body.eventTime !== undefined) {
+    const nextEventTime = normalizeEventTime(req.body.eventTime);
+    if (!nextEventTime) {
+      const error = new Error("eventTime must be a valid time.");
+      error.statusCode = 400;
+      throw error;
+    }
+    event.eventTime = nextEventTime;
+  }
   if (req.body.attendees !== undefined) event.attendees = toNumber(req.body.attendees);
   if (req.body.revenue !== undefined) event.revenue = toNumber(req.body.revenue);
 
@@ -1106,18 +1327,24 @@ export const getCalendar = asyncHandler(async (req, res) => {
   }
 
   const events = await AdminEvent.find({
-    date: { $gte: bounds.start, $lte: bounds.end },
+    $or: [
+      { eventDate: { $gte: bounds.start, $lte: bounds.end } },
+      { date: { $gte: bounds.start, $lte: bounds.end } },
+    ],
   }).lean();
 
   const dayMap = new Map();
   events.forEach((event) => {
-    const date = toIsoDateOnly(event.date);
+    const date = toIsoDateOnly(event.eventDate || event.date);
     if (!date) return;
     const current = dayMap.get(date) || [];
     current.push({
       id: event.displayId,
       title: event.name,
       status: event.status,
+      time: event.eventTime || "",
+      category: event.category || "",
+      venue: event.venue || "",
     });
     dayMap.set(date, current);
   });
@@ -1149,13 +1376,10 @@ export const getCalendar = asyncHandler(async (req, res) => {
 });
 
 export const getCalendarEvents = asyncHandler(async (req, res) => {
-  const events = await AdminEvent.find({}).sort({ date: 1 }).lean();
+  const events = await AdminEvent.find({}).sort({ eventDate: 1, eventTime: 1 }).lean();
   return res.status(200).json({
     success: true,
-    data: events.map((event) => ({
-      date: toIsoDateOnly(event.date),
-      title: event.name,
-    })),
+    data: events.map(toDisplayEvent),
   });
 });
 
@@ -1464,8 +1688,9 @@ export const updateProfile = asyncHandler(async (req, res) => {
     }
   });
 
-  if (req.body.avatar) {
-    req.user.profileImage = req.body.avatar;
+  const avatarUrl = req.body.avatarUrl ?? req.body.avatar;
+  if (avatarUrl !== undefined) {
+    req.user.profileImage = avatarUrl;
   }
   if (req.file) {
     req.user.profileImage = await uploadToCloudinary(req.file.buffer);
@@ -1498,5 +1723,36 @@ export const updatePreferences = asyncHandler(async (req, res) => {
     success: true,
     message: "Preferences updated successfully",
     data: preferences,
+  });
+});
+
+export const changePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    const error = new Error("Current password and new password are required.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (newPassword.length < 6) {
+    const error = new Error("New password must be at least 6 characters long.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const isMatch = await req.user.matchPassword(currentPassword);
+  if (!isMatch) {
+    const error = new Error("Current password is incorrect.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  req.user.password = newPassword;
+  await req.user.save();
+
+  return res.status(200).json({
+    success: true,
+    message: "Password updated successfully",
   });
 });

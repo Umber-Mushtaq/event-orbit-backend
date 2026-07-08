@@ -19,7 +19,26 @@ const adminEventSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    categoryId: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     venue: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    venueId: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    eventDate: {
+      type: Date,
+      required: true,
+    },
+    eventTime: {
       type: String,
       required: true,
       trim: true,
@@ -68,4 +87,3 @@ const adminEventSchema = new mongoose.Schema(
 );
 
 export default mongoose.model("AdminEvent", adminEventSchema);
-

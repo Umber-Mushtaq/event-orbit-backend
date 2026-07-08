@@ -13,6 +13,7 @@ import {
   getRecentEvents,
   getActivities,
   listEvents,
+  listVenues,
   getEventById,
   createEvent,
   updateEvent,
@@ -48,6 +49,7 @@ import {
   getProfile,
   updateProfile,
   updatePreferences,
+  changePassword,
 } from "../controllers/admin/adminController.js";
 
 const router = express.Router();
@@ -109,6 +111,7 @@ router.get("/users/:id", getUserById);
 
 router.get("/calendar", getCalendar);
 router.get("/calendar/events", getCalendarEvents);
+router.get("/venues", listVenues);
 
 router
   .route("/blogs")
@@ -131,5 +134,6 @@ router.patch("/settings", updateSettings);
 router.get("/profile", getProfile);
 router.patch("/profile", upload.single("avatar"), updateProfile);
 router.patch("/profile/preferences", updatePreferences);
+router.patch("/profile/password", changePassword);
 
 export default router;
