@@ -13,6 +13,7 @@ import reviewRoutes from "./src/routes/reviewRoutes.js";
 import bookingRoutes from "./src/routes/bookingRoutes.js";
 import userDashboardRoutes from "./src/routes/userDashboardRoutes.js";
 import wishlistRoutes from "./src/routes/wishlistRoutes.js";
+import adminRoutes from "./src/routes/adminRoutes.js";
 
 import "./src/models/Bookings.js";
 import "./src/models/Category.js";
@@ -38,15 +39,36 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/userDashboard", userDashboardRoutes);
 app.use("/api/wishlist", wishlistRoutes);
+app.use("/api/admin", adminRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: "Resource API Route Not Found" });
 });
 
 app.use((err, req, res, next) => {
-  const statusCode = err.statusCode || 500;
+  let statusCode = err.statusCode || 500;
+  let message = err.message || "Internal Server Error";
+
+  if (err.name === "ValidationError") {
+    statusCode = 400;
+    message = Object.values(err.errors)[0]?.message || message;
+  }
+
+  if (err.name === "CastError") {
+    statusCode = 400;
+    message = `Invalid ${err.path} format`;
+  }
+
+  if (err.code === 11000) {
+    statusCode = 400;
+    const duplicateField = Object.keys(err.keyValue || {})[0];
+    message = duplicateField
+      ? `${duplicateField} already exists`
+      : "Duplicate key error";
+  }
+
   res.status(statusCode).json({
-    message: err.message || "Internal Server Error",
+    message,
   });
 });
 

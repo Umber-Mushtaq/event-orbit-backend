@@ -28,6 +28,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    location: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     phoneNumber: {
       type: String,
       default: "",
@@ -85,6 +90,37 @@ const userSchema = new mongoose.Schema(
       default: "",
     },
 
+    // Admin vendor management fields
+    vendorCategory: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    vendorStatus: {
+      type: String,
+      enum: ["Approved", "Pending", "Rejected", "Suspended"],
+      default: function () {
+        return this.role === "vendor" ? "Pending" : undefined;
+      },
+    },
+    vendorRating: {
+      type: Number,
+      default: 0,
+      min: [0, "Rating cannot fall below 0"],
+      max: [5, "Max rating cannot exceed 5"],
+    },
+    vendorBookings: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    vendorRevenue: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    // Password Reset Tokens
     resetPasswordToken: String,
     resetPasswordExpire: Date,
   },
