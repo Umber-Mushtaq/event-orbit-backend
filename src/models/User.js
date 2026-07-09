@@ -43,7 +43,6 @@ const userSchema = new mongoose.Schema(
     },
     isApproved: {
       type: Boolean,
-      // Vendors default to false (needs admin approval), customers and admins default to true
       default: function () {
         return this.role !== "vendor";
       },
@@ -86,7 +85,6 @@ const userSchema = new mongoose.Schema(
       default: "",
     },
 
-    // Password Reset Tokens
     resetPasswordToken: String,
     resetPasswordExpire: Date,
   },
@@ -95,21 +93,17 @@ const userSchema = new mongoose.Schema(
   },
 );
 
-// Encrypt password before saving
 userSchema.pre("save", async function () {
-  // 1. Removed 'next' here
-  if (!this.isModified("password")) return; // 2. Changed to a simple return
+  if (!this.isModified("password")) return;
 
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
-    // 3. Removed next() from here, Mongoose proceeds automatically when done
   } catch (error) {
-    throw error; // 4. Throwing the error replaces next(error)
+    throw error;
   }
 });
 
-// Match password instance method
 userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };

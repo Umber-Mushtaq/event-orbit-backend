@@ -2,6 +2,7 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import sendEmail from "../utils/sendEmail.js";
+import { uploadToCloudinary } from "../config/cloudinary.js";
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -15,6 +16,9 @@ export const registerUnifiedUser = async ({
   email,
   password,
   role,
+  file,
+  businessName,
+  businessDescription,
 }) => {
   if (role === "admin") {
     throw new Error("Unauthorized role assignment.");
@@ -27,13 +31,31 @@ export const registerUnifiedUser = async ({
     throw err;
   }
 
-  // Create user using your clean layout details
+  // 1. Process profile image upload to Cloudinary if a file is provided
+  let profileImageUrl = "";
+  if (file && file.buffer) {
+    try {
+      profileImageUrl = await uploadToCloudinary(file.buffer);
+    } catch (uploadError) {
+      const err = new Error("Image upload to Cloudinary failed");
+      err.statusCode = 500;
+      throw err;
+    }
+  }
+
+  // 2. Create user inside MongoDB
   const user = await User.create({
     firstName,
     lastName,
     email,
     password,
     role: role || "customer",
+    profileImage: profileImageUrl,
+    // Safely assign vendor details if the registration matches vendor role
+    ...(role === "vendor" && {
+      businessName: businessName || "",
+      businessDescription: businessDescription || "",
+    }),
   });
 
   if (user.role === "vendor") {
@@ -53,6 +75,7 @@ export const registerUnifiedUser = async ({
       lastName: user.lastName,
       email: user.email,
       role: user.role,
+      profileImage: user.profileImage,
     },
   };
 };
