@@ -13,6 +13,7 @@ import reviewRoutes from "./src/routes/reviewRoutes.js";
 import bookingRoutes from "./src/routes/bookingRoutes.js";
 import userDashboardRoutes from "./src/routes/userDashboardRoutes.js";
 import wishlistRoutes from "./src/routes/wishlistRoutes.js";
+import blogRoutes from "./src/routes/blogRoutes.js";
 import adminRoutes from "./src/routes/adminRoutes.js";
 
 import "./src/models/Bookings.js";
@@ -39,6 +40,7 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/userDashboard", userDashboardRoutes);
 app.use("/api/wishlist", wishlistRoutes);
+app.use("/api/blogs", blogRoutes);
 app.use("/api/admin", adminRoutes);
 
 app.use((req, res) => {
