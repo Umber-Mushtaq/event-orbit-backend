@@ -7,6 +7,15 @@ const serviceSchema = new mongoose.Schema(
       ref: "User",
       required: [true, "A service must belong to a vendor"],
     },
+    vendorIds: {
+      type: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+      ],
+      default: [],
+    },
     categoryId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",

@@ -8,7 +8,11 @@ export const getCustomerWishlist = async (req, res, next) => {
     const wishlistItems = await Wishlist.find({ userId: authenticatedUserId })
       .populate({
         path: "serviceId",
-        select: "title category basePrice images location rating vendorId",
+        select: "title categoryId price images location averageRating vendorId",
+        populate: {
+          path: "categoryId",
+          select: "name",
+        },
       })
       .sort({ createdAt: -1 });
 
@@ -21,10 +25,10 @@ export const getCustomerWishlist = async (req, res, next) => {
           serviceId: service._id,
           vendorId: service.vendorId,
           name: service.title || "Archived Service Listing",
-          category: service.category || "General",
-          rating: service.rating || 5,
+          category: service.categoryId?.name || "General",
+          rating: service.averageRating || 5,
           location: service.location || "Location Not Provided",
-          price: service.basePrice || 0,
+          price: service.price || 0,
           image:
             Array.isArray(service.images) && service.images.length > 0
               ? service.images[0]

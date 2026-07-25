@@ -1,6 +1,7 @@
 import express from "express";
 import { upload } from "../config/cloudinary.js";
 import { protect, restrictTo } from "../middlewares/authMiddleware.js";
+import { createRateLimit } from "../middlewares/rateLimit.js";
 import {
   adminLogin,
   adminMe,
@@ -23,6 +24,11 @@ import {
   createEventCategory,
   updateEventCategory,
   deleteEventCategory,
+  listEventCategories as listAdminServices,
+  getEventCategoryById as getAdminServiceById,
+  createEventCategory as createAdminService,
+  updateEventCategory as updateAdminService,
+  deleteEventCategory as deleteAdminService,
   listVendors,
   getVendorById,
   createVendor,
@@ -53,8 +59,9 @@ import {
 } from "../controllers/admin/adminController.js";
 
 const router = express.Router();
+const adminRateLimit = createRateLimit({ max: 5, windowMs: 15 * 60 * 1000, keyPrefix: "admin-auth" });
 
-router.post("/auth/login", adminLogin);
+router.post("/auth/login", adminRateLimit, adminLogin);
 
 router.use(protect);
 router.use(restrictTo("admin"));
@@ -89,6 +96,16 @@ router
   .get(getEventCategoryById)
   .patch(upload.single("image"), updateEventCategory)
   .delete(deleteEventCategory);
+
+router
+  .route("/services")
+  .get(listAdminServices)
+  .post(upload.single("image"), createAdminService);
+router
+  .route("/services/:id")
+  .get(getAdminServiceById)
+  .patch(upload.single("image"), updateAdminService)
+  .delete(deleteAdminService);
 
 router
   .route("/vendors")

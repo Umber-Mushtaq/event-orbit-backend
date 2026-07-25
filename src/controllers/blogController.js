@@ -1,6 +1,7 @@
 import AdminBlog from "../models/admin/Blog.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { buildPagination, escapeRegex, parseLimit, parsePage } from "../utils/adminHelpers.js";
+import { sanitizeHtml } from "../utils/sanitizeHtml.js";
 
 const stripBlogHtml = (html) =>
   String(html || "")
@@ -26,7 +27,7 @@ const toPublicBlog = (blog) => ({
   category: blog.category,
   excerpt:
     blog.excerpt || stripBlogHtml(blog.content).slice(0, 180).trim(),
-  content: blog.content,
+  content: sanitizeHtml(blog.content),
   featureImage: blog.featureImage,
   authorName: getAuthorName(blog),
   authorAvatar: blog.authorAdminId?.profileImage || "",

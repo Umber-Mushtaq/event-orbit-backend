@@ -13,6 +13,7 @@ import AdminSetting from "../../models/admin/Setting.js";
 import AdminPreference from "../../models/admin/Preference.js";
 import { asyncHandler } from "../../middlewares/asyncHandler.js";
 import { uploadToCloudinary } from "../../config/cloudinary.js";
+import { sanitizeHtml } from "../../utils/sanitizeHtml.js";
 import {
   applyListQuery,
   buildPagination,
@@ -1444,7 +1445,7 @@ export const createBlog = asyncHandler(async (req, res) => {
     category: req.body.category,
     status: req.body.status || "Draft",
     excerpt: req.body.excerpt || "",
-    content: req.body.content,
+    content: sanitizeHtml(req.body.content),
     featureImage,
     authorAdminId: req.user?.id,
   });
@@ -1473,9 +1474,13 @@ export const updateBlog = asyncHandler(async (req, res) => {
     blog.slug = nextSlug;
   }
 
-  ["title", "category", "status", "excerpt", "content"].forEach((field) => {
+  ["title", "category", "status", "excerpt"].forEach((field) => {
     if (req.body[field] !== undefined) blog[field] = req.body[field];
   });
+
+  if (req.body.content !== undefined) {
+    blog.content = sanitizeHtml(req.body.content);
+  }
 
   if (req.body.featureImage && /^https?:\/\//i.test(req.body.featureImage)) {
     blog.featureImage = req.body.featureImage;

@@ -33,6 +33,16 @@ const userSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
+    city: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    country: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     phoneNumber: {
       type: String,
       default: "",
@@ -40,6 +50,20 @@ const userSchema = new mongoose.Schema(
     address: {
       type: String,
       default: "",
+    },
+    coverImage: {
+      type: String,
+      default: "",
+    },
+    yearsOfExperience: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    status: {
+      type: String,
+      default: "Active",
+      trim: true,
     },
     role: {
       type: String,
@@ -119,6 +143,15 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: 0,
+    },
+    serviceIds: {
+      type: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Service",
+        },
+      ],
+      default: [],
     },
 
     // Password Reset Tokens

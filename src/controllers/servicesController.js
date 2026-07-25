@@ -279,8 +279,10 @@ export const getServiceDetail = async (req, res) => {
           priceType: 1,
           location: 1,
           images: 1,
+          vendorIds: 1,
           averageRating: { $ifNull: [{ $avg: "$reviews.rating" }, 5] },
           vendor: {
+            _id: "$vendor._id",
             fullName: {
               $concat: ["$vendor.firstName", " ", "$vendor.lastName"],
             },

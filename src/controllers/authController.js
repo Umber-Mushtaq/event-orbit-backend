@@ -2,7 +2,7 @@ import { asyncHandler } from "../middlewares/asyncHandler.js";
 import * as authService from "../services/authService.js";
 
 export const registerUser = asyncHandler(async (req, res) => {
-  const result = await authService.registerUnifiedUser(req.body);
+  const result = await authService.registerUnifiedUser(req.body, req.file);
   res.status(201).json(result);
 });
 

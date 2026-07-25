@@ -2,6 +2,7 @@ import crypto from "crypto";
 import User from "../models/User.js";
 import sendEmail from "../utils/sendEmail.js";
 import { generateToken } from "../utils/token.js";
+import { uploadToCloudinary } from "../config/cloudinary.js";
 
 export const registerUnifiedUser = async ({
   firstName,
@@ -9,12 +10,15 @@ export const registerUnifiedUser = async ({
   email,
   password,
   role,
-}) => {
+  businessName,
+  businessDescription,
+}, file) => {
   if (role === "admin") {
     throw new Error("Unauthorized role assignment.");
   }
 
-  const userExists = await User.findOne({ email });
+  const normalizedEmail = String(email || "").toLowerCase().trim();
+  const userExists = await User.findOne({ email: normalizedEmail });
   if (userExists) {
     const err = new Error("An account already exists with this email");
     err.statusCode = 400;
@@ -25,10 +29,21 @@ export const registerUnifiedUser = async ({
   const user = await User.create({
     firstName,
     lastName,
-    email,
+    email: normalizedEmail,
     password,
     role: role || "customer",
+    ...(role === "vendor"
+      ? {
+          businessName: businessName || "",
+          businessDescription: businessDescription || "",
+        }
+      : {}),
   });
+
+  if (file) {
+    user.profileImage = await uploadToCloudinary(file.buffer);
+    await user.save();
+  }
 
   if (user.role === "vendor") {
     return {
@@ -105,7 +120,7 @@ export const loginUnifiedUser = async ({ email, password }) => {
 };
 
 export const processForgotPassword = async (email) => {
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email: String(email || "").toLowerCase().trim() });
 
   if (!user) {
     const err = new Error("No user found with this email");
@@ -126,7 +141,7 @@ export const processForgotPassword = async (email) => {
   await user.save();
 
   // Construct link pointing to your frontend route mapping
-  const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+  const resetUrl = `${process.env.FRONTEND_URL}/auth/reset-password/${resetToken}`;
 
   const messageHtml = `
     <h1>Password Reset Request</h1>
