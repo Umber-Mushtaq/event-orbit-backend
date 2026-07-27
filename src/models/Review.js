@@ -34,8 +34,7 @@ const reviewSchema = new mongoose.Schema(
   },
 );
 
-// Optional Security Pattern: Ensures a user can leave only ONE review per unique booking transaction instance
-reviewSchema.index({ userId: 1, bookingId: 1 }, { unique: true });
+reviewSchema.index({ userId: 1, serviceId: 1 }, { unique: true });
 
 const Review = mongoose.model("Review", reviewSchema);
 export default Review;

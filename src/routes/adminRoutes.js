@@ -1,7 +1,6 @@
 import express from "express";
 import { upload } from "../config/cloudinary.js";
 import { protect, restrictTo } from "../middlewares/authMiddleware.js";
-import { createRateLimit } from "../middlewares/rateLimit.js";
 import {
   adminLogin,
   adminMe,
@@ -59,9 +58,8 @@ import {
 } from "../controllers/admin/adminController.js";
 
 const router = express.Router();
-const adminRateLimit = createRateLimit({ max: 5, windowMs: 15 * 60 * 1000, keyPrefix: "admin-auth" });
 
-router.post("/auth/login", adminRateLimit, adminLogin);
+router.post("/auth/login", adminLogin);
 
 router.use(protect);
 router.use(restrictTo("admin"));
