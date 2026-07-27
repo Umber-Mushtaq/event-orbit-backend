@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Category from "../models/Category.js";
 import Service from "../models/Service.js";
+import User from "../models/User.js";
 
 export const getAllCategories = async (req, res) => {
   try {
@@ -59,12 +60,19 @@ const normalizeVendor = (vendor) => {
     facebook: vendor.facebook || "",
     website: vendor.website || "",
     isApproved: Boolean(vendor.isApproved),
+    vendorCategory: vendor.vendorCategory || "",
     vendorRating: vendor.vendorRating || 0,
     yearsOfExperience: vendor.yearsOfExperience || 0,
     status: vendor.status || "",
     createdAt: vendor.createdAt,
   };
 };
+
+const escapeRegex = (value = "") =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const vendorSelect =
+  "firstName lastName profileImage businessName businessDescription vendorBio email phoneNumber whatsappNumber address location city country instagram linkedin facebook website isApproved vendorCategory vendorRating yearsOfExperience status createdAt";
 
 export const getCategoryDetail = async (req, res) => {
   try {
@@ -100,15 +108,17 @@ export const getCategoryDetail = async (req, res) => {
       categoryId: resolvedCategoryId,
       isActive: true,
     })
-      .populate(
-        "vendorId",
-        "firstName lastName profileImage businessName businessDescription vendorBio email phoneNumber whatsappNumber address location city country instagram linkedin facebook website isApproved vendorRating yearsOfExperience status createdAt",
-      )
-      .populate(
-        "vendorIds",
-        "firstName lastName profileImage businessName businessDescription vendorBio email phoneNumber whatsappNumber address location city country instagram linkedin facebook website isApproved vendorRating yearsOfExperience status createdAt",
-      )
+      .populate("vendorId", vendorSelect)
+      .populate("vendorIds", vendorSelect)
       .sort({ createdAt: -1 });
+
+    const profileVendors = await User.find({
+      role: "vendor",
+      isApproved: true,
+      vendorCategory: { $regex: new RegExp(`^${escapeRegex(category.name)}$`, "i") },
+    })
+      .select(vendorSelect)
+      .lean();
 
     const vendorMap = new Map();
 
@@ -120,9 +130,16 @@ export const getCategoryDetail = async (req, res) => {
 
       for (const vendor of vendorsFromService) {
         const normalized = normalizeVendor(vendor);
-        if (normalized && !vendorMap.has(String(normalized._id))) {
+        if (normalized?.isApproved && !vendorMap.has(String(normalized._id))) {
           vendorMap.set(String(normalized._id), normalized);
         }
+      }
+    }
+
+    for (const vendor of profileVendors) {
+      const normalized = normalizeVendor(vendor);
+      if (normalized && !vendorMap.has(String(normalized._id))) {
+        vendorMap.set(String(normalized._id), normalized);
       }
     }
 

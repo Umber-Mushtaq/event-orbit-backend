@@ -1,6 +1,44 @@
 import Service from "../models/Service.js";
 import mongoose from "mongoose";
 
+const vendorSelect =
+  "firstName lastName profileImage businessName businessDescription vendorBio email phoneNumber whatsappNumber address location city country instagram linkedin facebook website isApproved vendorCategory vendorRating yearsOfExperience status createdAt";
+
+const normalizeRelatedVendor = (vendor) => {
+  if (!vendor) return null;
+
+  const firstName = vendor.firstName || "";
+  const lastName = vendor.lastName || "";
+
+  return {
+    _id: vendor._id,
+    firstName,
+    lastName,
+    fullName: [firstName, lastName].filter(Boolean).join(" ").trim(),
+    businessName: vendor.businessName || "",
+    businessDescription: vendor.businessDescription || "",
+    vendorBio: vendor.vendorBio || "",
+    profileImage: vendor.profileImage || "",
+    email: vendor.email || "",
+    phoneNumber: vendor.phoneNumber || "",
+    whatsappNumber: vendor.whatsappNumber || "",
+    address: vendor.address || "",
+    location: vendor.location || "",
+    city: vendor.city || "",
+    country: vendor.country || "",
+    instagram: vendor.instagram || "",
+    linkedin: vendor.linkedin || "",
+    facebook: vendor.facebook || "",
+    website: vendor.website || "",
+    isApproved: Boolean(vendor.isApproved),
+    vendorCategory: vendor.vendorCategory || "",
+    vendorRating: vendor.vendorRating || 0,
+    yearsOfExperience: vendor.yearsOfExperience || 0,
+    status: vendor.status || "",
+    createdAt: vendor.createdAt,
+  };
+};
+
 export const getVendorServiceDetails = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -243,6 +281,7 @@ export const getServiceDetail = async (req, res) => {
           priceType: { $first: "$priceType" },
           location: { $first: "$location" },
           images: { $first: "$images" },
+          categoryId: { $first: "$categoryId" },
           vendor: { $first: "$vendor" },
           reviews: {
             $push: {
@@ -279,6 +318,7 @@ export const getServiceDetail = async (req, res) => {
           priceType: 1,
           location: 1,
           images: 1,
+          categoryId: 1,
           vendorIds: 1,
           averageRating: { $ifNull: [{ $avg: "$reviews.rating" }, 5] },
           vendor: {
@@ -310,7 +350,44 @@ export const getServiceDetail = async (req, res) => {
         .json({ success: false, message: "Service listing not found." });
     }
 
-    res.status(200).json({ success: true, data: serviceData[0] });
+    const service = serviceData[0];
+    const relatedServices = await Service.find({
+      categoryId: service.categoryId,
+      isActive: true,
+    })
+      .populate("vendorId", vendorSelect)
+      .populate("vendorIds", vendorSelect)
+      .sort({ createdAt: -1 });
+
+    const vendorMap = new Map();
+
+    for (const relatedService of relatedServices) {
+      const vendorsFromService = [
+        relatedService.vendorId,
+        ...(Array.isArray(relatedService.vendorIds) ? relatedService.vendorIds : []),
+      ].filter(Boolean);
+
+      for (const vendor of vendorsFromService) {
+        const normalized = normalizeRelatedVendor(vendor);
+        if (normalized?.isApproved && !vendorMap.has(String(normalized._id))) {
+          vendorMap.set(String(normalized._id), normalized);
+        }
+      }
+    }
+
+    const relatedVendors = Array.from(vendorMap.values()).sort((a, b) => {
+      const ratingDiff = Number(b.vendorRating || 0) - Number(a.vendorRating || 0);
+      if (ratingDiff !== 0) return ratingDiff;
+      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        ...service,
+        relatedVendors,
+      },
+    });
   } catch (error) {
     console.error("Error fetching service details:", error);
     res
