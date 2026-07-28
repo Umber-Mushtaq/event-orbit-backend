@@ -71,6 +71,25 @@ const normalizeVendor = (vendor) => {
 const escapeRegex = (value = "") =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const slugify = (value = "") =>
+  String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+
+const categorySlugAliases = {
+  "event-venues": "wedding-halls",
+};
+
+const findCategoryBySlug = async (slug) => {
+  const targetSlug = categorySlugAliases[slug] || slug;
+  const categories = await Category.find({}).lean();
+
+  return categories.find((category) => slugify(category.name) === targetSlug);
+};
+
 const vendorSelect =
   "firstName lastName profileImage businessName businessDescription vendorBio email phoneNumber whatsappNumber address location city country instagram linkedin facebook website isApproved vendorCategory vendorRating yearsOfExperience status createdAt";
 
@@ -80,9 +99,15 @@ export const getCategoryDetail = async (req, res) => {
     let resolvedCategoryId = id;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid Category ID format." });
+      const categoryBySlug = await findCategoryBySlug(id);
+
+      if (!categoryBySlug) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Category not found." });
+      }
+
+      resolvedCategoryId = String(categoryBySlug._id);
     }
 
     let category = await Category.findById(resolvedCategoryId).lean();

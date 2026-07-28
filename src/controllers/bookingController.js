@@ -49,8 +49,6 @@ export const getVendorBookings = async (req, res, next) => {
       {
         $match: {
           vendorId: vendorId,
-          // Only fetch requests awaiting vendor attention
-          bookingStatus: { $in: ["pending", "confirmed"] },
         },
       },
       // Join User collection to extract Customer Details
@@ -72,8 +70,8 @@ export const getVendorBookings = async (req, res, next) => {
         },
       },
       // Flatten lookup arrays
-      { $unwind: "$customer" },
-      { $unwind: "$service" },
+      { $unwind: { path: "$customer", preserveNullAndEmptyArrays: true } },
+      { $unwind: { path: "$service", preserveNullAndEmptyArrays: true } },
       // Sort: Newest requests first
       { $sort: { createdAt: -1 } },
       // Project fields to clean up mapping on frontend
@@ -81,13 +79,23 @@ export const getVendorBookings = async (req, res, next) => {
         $project: {
           _id: 1,
           customerName: {
-            $concat: ["$customer.firstName", " ", "$customer.lastName"],
+            $trim: {
+              input: {
+                $concat: [
+                  { $ifNull: ["$customer.firstName", ""] },
+                  " ",
+                  { $ifNull: ["$customer.lastName", ""] },
+                ],
+              },
+            },
           },
-          serviceName: "$service.title",
+          serviceName: { $ifNull: ["$service.title", "Archived Service"] },
           requestedDate: "$eventDate",
+          guestsCount: 1,
           amount: "$totalAmount",
           status: "$bookingStatus",
           paymentStatus: 1,
+          createdAt: 1,
         },
       },
     ]);
@@ -105,12 +113,34 @@ export const getVendorBookings = async (req, res, next) => {
 export const updateBookingStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { status } = req.body; // "confirmed" or "cancelled"
+    const {
+      status,
+      bookingStatus,
+      paymentStatus,
+      eventDate,
+      guestsCount,
+      totalAmount,
+    } = req.body;
     const actorId = req.user.id; // The logged-in user's ID from the JWT token
+    const requestedStatus = status || bookingStatus;
 
     // 1. Basic Validation
-    if (!["confirmed", "cancelled"].includes(status)) {
+    if (
+      requestedStatus &&
+      !["pending", "confirmed", "completed", "cancelled"].includes(
+        requestedStatus,
+      )
+    ) {
       const error = new Error("Invalid booking status action requested.");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (
+      paymentStatus &&
+      !["pending", "paid", "refunded"].includes(paymentStatus)
+    ) {
+      const error = new Error("Invalid payment status requested.");
       error.statusCode = 400;
       throw error;
     }
@@ -138,38 +168,107 @@ export const updateBookingStatus = async (req, res, next) => {
     }
 
     // 4. Role-Based Logic Guards
-    if (isOwnerCustomer && status === "confirmed") {
+    if (isOwnerCustomer && requestedStatus !== "cancelled") {
       // A customer shouldn't be able to force-approve their own booking
       const error = new Error(
-        "Customers cannot accept or confirm booking requests.",
+        "Customers can only cancel their own booking requests.",
       );
       error.statusCode = 403;
       throw error;
     }
 
-    // 5. Apply Updates and Save
-    booking.bookingStatus = status;
+    if (
+      isOwnerCustomer &&
+      (paymentStatus || eventDate || guestsCount || totalAmount)
+    ) {
+      const error = new Error("Customers cannot edit booking details.");
+      error.statusCode = 403;
+      throw error;
+    }
 
-    if (status === "cancelled") {
+    // 5. Apply Updates and Save
+    if (requestedStatus) {
+      booking.bookingStatus = requestedStatus;
+    }
+
+    if (isAssignedVendor) {
+      if (paymentStatus) {
+        booking.paymentStatus = paymentStatus;
+      }
+
+      if (eventDate) {
+        const parsedEventDate = new Date(eventDate);
+        if (Number.isNaN(parsedEventDate.getTime())) {
+          const error = new Error("Invalid event date requested.");
+          error.statusCode = 400;
+          throw error;
+        }
+        booking.eventDate = parsedEventDate;
+      }
+
+      if (guestsCount !== undefined) {
+        const parsedGuestsCount = Number(guestsCount);
+        if (!Number.isInteger(parsedGuestsCount) || parsedGuestsCount < 1) {
+          const error = new Error("Guests count must be at least 1.");
+          error.statusCode = 400;
+          throw error;
+        }
+        booking.guestsCount = parsedGuestsCount;
+      }
+
+      if (totalAmount !== undefined) {
+        const parsedTotalAmount = Number(totalAmount);
+        if (Number.isNaN(parsedTotalAmount) || parsedTotalAmount < 0) {
+          const error = new Error("Total amount cannot be negative.");
+          error.statusCode = 400;
+          throw error;
+        }
+        booking.totalAmount = parsedTotalAmount;
+      }
+    }
+
+    if (requestedStatus === "cancelled" && !paymentStatus) {
       booking.paymentStatus = "refunded";
     }
 
     await booking.save();
+    await booking.populate([
+      { path: "userId", select: "firstName lastName" },
+      { path: "serviceId", select: "title" },
+    ]);
 
     // 6. Dynamic Contextual Success Message
-    let successMessage = `Booking has been successfully ${status}.`;
-    if (status === "confirmed") {
+    let successMessage = "Booking has been successfully updated.";
+    if (requestedStatus === "confirmed") {
       successMessage = "Booking has been successfully confirmed.";
-    } else if (status === "cancelled") {
+    } else if (requestedStatus === "cancelled") {
       successMessage = isOwnerCustomer
         ? "Booking has been successfully cancelled by the customer."
         : "Booking request has been declined by the vendor.";
     }
 
+    const customerName = [
+      booking.userId?.firstName || "",
+      booking.userId?.lastName || "",
+    ]
+      .join(" ")
+      .trim();
+
     res.status(200).json({
       success: true,
       message: successMessage,
       booking,
+      formattedBooking: {
+        _id: booking._id,
+        customerName,
+        serviceName: booking.serviceId?.title || "Archived Service",
+        requestedDate: booking.eventDate,
+        guestsCount: booking.guestsCount,
+        amount: booking.totalAmount,
+        status: booking.bookingStatus,
+        paymentStatus: booking.paymentStatus,
+        createdAt: booking.createdAt,
+      },
     });
   } catch (error) {
     next(error);

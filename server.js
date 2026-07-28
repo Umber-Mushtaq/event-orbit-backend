@@ -15,6 +15,7 @@ import userDashboardRoutes from "./src/routes/userDashboardRoutes.js";
 import wishlistRoutes from "./src/routes/wishlistRoutes.js";
 import blogRoutes from "./src/routes/blogRoutes.js";
 import adminRoutes from "./src/routes/adminRoutes.js";
+import contactRoutes from "./src/routes/contactRoutes.js";
 
 import "./src/models/Bookings.js";
 import "./src/models/Category.js";
@@ -39,7 +40,6 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use("/api/auth", authRoutes);
 app.use("/api/vendor", vendorRoutes);
 app.use("/api/categories", categoryRoutes);
-app.use("/api/categories", serviceRoutes);
 app.use("/api/services", serviceRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/bookings", bookingRoutes);
@@ -47,6 +47,7 @@ app.use("/api/userDashboard", userDashboardRoutes);
 app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/blogs", blogRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/contact", contactRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: "Resource API Route Not Found" });

@@ -1,4 +1,5 @@
 import Service from "../models/Service.js";
+import Category from "../models/Category.js";
 import mongoose from "mongoose";
 
 const vendorSelect =
@@ -38,6 +39,25 @@ const normalizeRelatedVendor = (vendor) => {
     createdAt: vendor.createdAt,
   };
 };
+
+const normalizeImageUrl = (image) => {
+  if (!image) return "";
+
+  if (typeof image === "string") {
+    return image.trim();
+  }
+
+  return (
+    image.secure_url ||
+    image.url ||
+    image.src ||
+    image.path ||
+    ""
+  ).trim();
+};
+
+const escapeRegex = (value = "") =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export const getVendorServiceDetails = async (req, res, next) => {
   try {
@@ -143,10 +163,20 @@ export const getAllServices = async (req, res) => {
       const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(category);
       if (isValidObjectId) {
         queryCondition.categoryId = category;
+      } else {
+        const matchedCategory = await Category.findOne({
+          name: { $regex: new RegExp(`^${escapeRegex(category)}$`, "i") },
+        }).select("_id");
+
+        if (matchedCategory) {
+          queryCondition.categoryId = matchedCategory._id;
+        }
       }
     }
     if (location && location.trim() !== "" && location !== "all") {
-      queryCondition.location = { $regex: new RegExp(location, "i") };
+      queryCondition.location = {
+        $regex: new RegExp(escapeRegex(location.trim()), "i"),
+      };
     }
 
     if ((minPrice && minPrice !== "") || (maxPrice && maxPrice !== "")) {
@@ -171,41 +201,59 @@ export const getAllServices = async (req, res) => {
     }
 
     if (search && search.trim() !== "") {
-      queryCondition.$text = { $search: search };
+      const searchPattern = new RegExp(escapeRegex(search.trim()), "i");
+      const matchingCategories = await Category.find({
+        name: searchPattern,
+      }).select("_id");
+
+      queryCondition.$or = [
+        { title: searchPattern },
+        { description: searchPattern },
+        { location: searchPattern },
+      ];
+
+      if (matchingCategories.length > 0) {
+        queryCondition.$or.push({
+          categoryId: { $in: matchingCategories.map((item) => item._id) },
+        });
+      }
     }
 
     const services = await Service.find(queryCondition)
       .populate("vendorId")
       .sort({ createdAt: -1 });
 
-    const formattedServices = services.map((service) => ({
-      id: service._id,
-      title: service.title,
-      description: service.description || "",
-      price: service.price || 0,
-      priceType: service.priceType || "fixed",
-      location: service.location || "Location Not Specified",
-      images:
-        Array.isArray(service.images) && service.images.length > 0
-          ? service.images
-          : [],
-      averageRating: service.averageRating || 5,
-      totalReviews: service.totalReviews || 0,
-      createdAt: service.createdAt,
-      vendor: service.vendorId
-        ? {
-            id: service.vendorId._id,
-            fullName: service.vendorId.fullName,
-            businessName:
-              service.vendorId.businessName || "EventOrbit Pro Vendor",
-            profileImage: service.vendorId.profileImage || "",
-          }
-        : {
-            name: "Premium Provider",
-            businessName: "EventOrbit Pro Vendor",
-            avatar: "",
-          },
-    }));
+    const formattedServices = services.map((service) => {
+      const images = Array.isArray(service.images)
+        ? service.images.map(normalizeImageUrl).filter(Boolean)
+        : [];
+
+      return {
+        id: service._id,
+        title: service.title,
+        description: service.description || "",
+        price: service.price || 0,
+        priceType: service.priceType || "fixed",
+        location: service.location || "Location Not Specified",
+        images,
+        averageRating: service.averageRating || 5,
+        totalReviews: service.totalReviews || 0,
+        createdAt: service.createdAt,
+        vendor: service.vendorId
+          ? {
+              id: service.vendorId._id,
+              fullName: service.vendorId.fullName,
+              businessName:
+                service.vendorId.businessName || "EventOrbit Pro Vendor",
+              profileImage: service.vendorId.profileImage || "",
+            }
+          : {
+              name: "Premium Provider",
+              businessName: "EventOrbit Pro Vendor",
+              avatar: "",
+            },
+      };
+    });
 
     return res.status(200).json({
       success: true,

@@ -8,7 +8,6 @@ import {
 const router = express.Router();
 
 router.get("/getAllServices", getAllServices);
-router.get("/getAllCategories", getAllServices);
 router.get("/:id", getVendorServiceDetails);
 router.get("/categoryDetail/:id", getServiceDetail);
 router.get("/serviceDetail/:id", getServiceDetail);

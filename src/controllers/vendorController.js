@@ -5,6 +5,30 @@ import User from "../models/User.js";
 import { uploadToCloudinary } from "../config/cloudinary.js";
 import mongoose from "mongoose";
 
+const slugify = (value = "") =>
+  String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+
+const findVendorByIdOrSlug = async (idOrSlug) => {
+  if (mongoose.Types.ObjectId.isValid(idOrSlug)) {
+    return User.findById(idOrSlug).select("-password");
+  }
+
+  const vendors = await User.find({ role: "vendor" }).select("-password").lean();
+
+  return vendors.find((vendor) => {
+    const displayName =
+      vendor.businessName ||
+      [vendor.firstName, vendor.lastName].filter(Boolean).join(" ");
+
+    return slugify(displayName) === idOrSlug;
+  });
+};
+
 export const getVendorDashboardOverview = async (req, res, next) => {
   try {
     // req.user.id comes from your auth middleware protecting this route
@@ -450,13 +474,13 @@ export const getPublicVendorProfile = async (req, res, next) => {
   try {
     const userId = req.params.id;
 
-    const userProfile = await User.findById(userId).select("-password");
+    const userProfile = await findVendorByIdOrSlug(userId);
     if (!userProfile || userProfile.role !== "vendor") {
       const error = new Error("Vendor profile registry not found.");
       error.statusCode = 404;
       throw error;
     }
-    const reviews = await Review.find({ vendorId: userId })
+    const reviews = await Review.find({ vendorId: userProfile._id })
       .populate("userId", "firstName lastName profileImage")
       .populate("serviceId", "title")
       .sort({ createdAt: -1 });
