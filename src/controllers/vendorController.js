@@ -484,11 +484,21 @@ export const getPublicVendorProfile = async (req, res, next) => {
       .populate("userId", "firstName lastName profileImage")
       .populate("serviceId", "title")
       .sort({ createdAt: -1 });
+    const services = await Service.find({
+      isActive: true,
+      $or: [
+        { vendorId: userProfile._id },
+        { vendorIds: userProfile._id },
+      ],
+    })
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.status(200).json({
       success: true,
       profile: userProfile,
       reviews,
+      services,
     });
   } catch (error) {
     next(error);
@@ -497,11 +507,42 @@ export const getPublicVendorProfile = async (req, res, next) => {
 
 export const getAllVendors = async (req, res, next) => {
   try {
-    const vendors = await User.find({ role: "vendor" }).select("-password");
+    const vendors = await User.find({ role: "vendor" }).select("-password").lean();
+    const vendorIds = vendors.map((vendor) => vendor._id);
+    const services = await Service.find({
+      isActive: true,
+      $or: [
+        { vendorId: { $in: vendorIds } },
+        { vendorIds: { $in: vendorIds } },
+      ],
+    })
+      .select("_id vendorId vendorIds createdAt")
+      .sort({ createdAt: -1 })
+      .lean();
+    const primaryServiceByVendorId = new Map();
+
+    for (const service of services) {
+      const serviceVendorIds = [
+        service.vendorId,
+        ...(Array.isArray(service.vendorIds) ? service.vendorIds : []),
+      ].filter(Boolean);
+
+      for (const serviceVendorId of serviceVendorIds) {
+        const key = String(serviceVendorId);
+        if (!primaryServiceByVendorId.has(key)) {
+          primaryServiceByVendorId.set(key, service._id);
+        }
+      }
+    }
+    const vendorsWithPrimaryServices = vendors.map((vendor) => ({
+      ...vendor,
+      primaryServiceId: primaryServiceByVendorId.get(String(vendor._id)) || null,
+    }));
+
     res.status(200).json({
       success: true,
-      count: vendors.length,
-      vendors,
+      count: vendorsWithPrimaryServices.length,
+      vendors: vendorsWithPrimaryServices,
     });
   } catch (error) {
     next(error);

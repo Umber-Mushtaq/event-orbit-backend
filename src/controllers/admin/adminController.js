@@ -31,6 +31,7 @@ import {
 } from "../../utils/adminHelpers.js";
 import { generateToken } from "../../utils/token.js";
 import crypto from "crypto";
+import mongoose from "mongoose";
 
 const ALLOWED_CATEGORY_ICONS = [
   "tags",
@@ -245,9 +246,13 @@ const toDisplayBlog = (blog) => ({
 });
 
 const findByDisplayId = async (Model, value) => {
-  return Model.findOne({
-    $or: [{ _id: value }, { displayId: value }, { slug: value }],
-  });
+  const query = [{ displayId: value }, { slug: value }];
+
+  if (mongoose.Types.ObjectId.isValid(value)) {
+    query.unshift({ _id: value });
+  }
+
+  return Model.findOne({ $or: query });
 };
 
 const requireFields = (payload, fields) => {

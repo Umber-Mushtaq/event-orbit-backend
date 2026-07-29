@@ -5,7 +5,7 @@ import mongoose from "mongoose";
 const vendorSelect =
   "firstName lastName profileImage businessName businessDescription vendorBio email phoneNumber whatsappNumber address location city country instagram linkedin facebook website isApproved vendorCategory vendorRating yearsOfExperience status createdAt";
 
-const normalizeRelatedVendor = (vendor) => {
+const normalizeRelatedVendor = (vendor, primaryServiceId = null) => {
   if (!vendor) return null;
 
   const firstName = vendor.firstName || "";
@@ -37,6 +37,7 @@ const normalizeRelatedVendor = (vendor) => {
     yearsOfExperience: vendor.yearsOfExperience || 0,
     status: vendor.status || "",
     createdAt: vendor.createdAt,
+    primaryServiceId,
   };
 };
 
@@ -416,7 +417,7 @@ export const getServiceDetail = async (req, res) => {
       ].filter(Boolean);
 
       for (const vendor of vendorsFromService) {
-        const normalized = normalizeRelatedVendor(vendor);
+        const normalized = normalizeRelatedVendor(vendor, relatedService._id);
         if (normalized?.isApproved && !vendorMap.has(String(normalized._id))) {
           vendorMap.set(String(normalized._id), normalized);
         }

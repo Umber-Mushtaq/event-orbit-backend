@@ -33,7 +33,7 @@ export const getAllCategories = async (req, res) => {
   }
 };
 
-const normalizeVendor = (vendor) => {
+const normalizeVendor = (vendor, primaryServiceId = null) => {
   if (!vendor) return null;
 
   const firstName = vendor.firstName || "";
@@ -65,6 +65,7 @@ const normalizeVendor = (vendor) => {
     yearsOfExperience: vendor.yearsOfExperience || 0,
     status: vendor.status || "",
     createdAt: vendor.createdAt,
+    primaryServiceId,
   };
 };
 
@@ -154,7 +155,7 @@ export const getCategoryDetail = async (req, res) => {
       ].filter(Boolean);
 
       for (const vendor of vendorsFromService) {
-        const normalized = normalizeVendor(vendor);
+        const normalized = normalizeVendor(vendor, service._id);
         if (normalized?.isApproved && !vendorMap.has(String(normalized._id))) {
           vendorMap.set(String(normalized._id), normalized);
         }
